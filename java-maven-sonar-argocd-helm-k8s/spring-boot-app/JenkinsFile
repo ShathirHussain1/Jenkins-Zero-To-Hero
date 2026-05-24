@@ -34,13 +34,16 @@ pipeline {
     
     stage('Build and Push Docker Image') {
       environment {
-        // FIXED: Make sure this reflects your target Docker Hub namespace 
         DOCKER_IMAGE = "shathirhussain/ultimate-cicd:${BUILD_NUMBER}"
       }
       steps {
-        // FIXED: Streamlined using explicit shell execution blocks to bypass container runtime plugin conflicts
         withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
           sh '''
+            # 1. Install the Docker CLI binaries into this temporary Maven container
+            echo "Installing Docker CLI..."
+            curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-24.0.7.tgz | tar -xzf - --strip-components=1 -C /usr/local/bin
+            
+            # 2. Proceed with your standard build and push instructions
             cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
             docker build -t ${DOCKER_IMAGE} .
             echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
