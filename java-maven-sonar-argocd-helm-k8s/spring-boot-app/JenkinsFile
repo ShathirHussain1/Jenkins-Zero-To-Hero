@@ -1,7 +1,6 @@
 pipeline {
   agent {
     docker {
-      // FIXED: Swapped to an official Maven Java 17 image to support the SonarQube Scanner requirements
       image 'maven:3.9.6-eclipse-temurin-17'
       args '--user root -v /var/run/docker.sock:/var/run/docker.sock' 
     }
@@ -39,11 +38,9 @@ pipeline {
       steps {
         withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
           sh '''
-            # 1. Install the Docker CLI binaries into this temporary Maven container
             echo "Installing Docker CLI..."
             curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-24.0.7.tgz | tar -xzf - --strip-components=1 -C /usr/local/bin
             
-            # 2. Proceed with your standard build and push instructions
             cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
             docker build -t ${DOCKER_IMAGE} .
             echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
@@ -63,9 +60,7 @@ pipeline {
                 sh '''
                     export GIT_TERMINAL_PROMPT=0
                     
-                    # FIXED: Tell Git to trust this workspace directory despite the user mismatch
                     git config --global --add safe.directory /var/lib/jenkins/workspace/ultimate-demo
-                    
                     git config --global user.email "abhishek.xyz@gmail.com"
                     git config --global user.name "ShathirHussain1"
                     
@@ -78,3 +73,5 @@ pipeline {
             }
         }
     }
+  } // Matches stages
+} // Matches pipeline
