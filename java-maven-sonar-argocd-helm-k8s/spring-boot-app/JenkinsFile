@@ -1,8 +1,9 @@
 pipeline {
   agent {
     docker {
-      image 'abhishekf5/maven-abhishek-docker-agent:v1'
-      args '--user root -v /var/run/docker.sock:/var/run/docker.sock' // mount Docker socket to access the host's Docker daemon
+      // FIXED: Swapped to an official Maven Java 17 image to support the SonarQube Scanner requirements
+      image 'maven:3.9.6-eclipse-temurin-17'
+      args '--user root -v /var/run/docker.sock:/var/run/docker.sock' 
     }
   }
   stages {
@@ -12,13 +13,14 @@ pipeline {
         git branch: 'main', url: 'https://github.com/ShathirHussain1/Jenkins-Zero-To-Hero.git'
       }
     }
+    
     stage('Build and Test') {
       steps {
         sh 'ls -ltr'
-        // build the project and create a JAR file
         sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
       }
     }
+    
     stage('Static Code Analysis') {
       environment {
         SONAR_URL = "http://13.206.187.144:9000"
@@ -29,22 +31,25 @@ pipeline {
         }
       }
     }
+    
     stage('Build and Push Docker Image') {
       environment {
-        DOCKER_IMAGE = "abhishekf5/ultimate-cicd:${BUILD_NUMBER}"
-        // DOCKERFILE_LOCATION = "java-maven-sonar-argocd-helm-k8s/spring-boot-app/Dockerfile"
-        REGISTRY_CREDENTIALS = credentials('docker-cred')
+        // FIXED: Make sure this reflects your target Docker Hub namespace 
+        DOCKER_IMAGE = "shathirhussain/ultimate-cicd:${BUILD_NUMBER}"
       }
       steps {
-        script {
-            sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && docker build -t ${DOCKER_IMAGE} .'
-            def dockerImage = docker.image("${DOCKER_IMAGE}")
-            docker.withRegistry('https://index.docker.io/v1/', "docker-cred") {
-                dockerImage.push()
-            }
+        // FIXED: Streamlined using explicit shell execution blocks to bypass container runtime plugin conflicts
+        withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh '''
+            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+            docker build -t ${DOCKER_IMAGE} .
+            echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+            docker push ${DOCKER_IMAGE}
+          '''
         }
       }
     }
+    
     stage('Update Deployment File') {
         environment {
             GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
@@ -53,13 +58,18 @@ pipeline {
         steps {
             withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
                 sh '''
-                    git config user.email "abhishek.xyz@gmail.com"
-                    git config user.name "ShathirHussain1"
-                    BUILD_NUMBER=${BUILD_NUMBER}
+                    # Prevent terminal prompts from stalling the automated execution
+                    export GIT_TERMINAL_PROMPT=0
+                    
+                    git config --global user.email "abhishek.xyz@gmail.com"
+                    git config --global user.name "ShathirHussain1"
+                    
                     sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
                     git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
                     git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                    git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+                    
+                    # Added explicit .git suffix extension to ensure strict mapping compatibility
+                    git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
                 '''
             }
         }
