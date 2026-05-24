@@ -61,8 +61,10 @@ pipeline {
         steps {
             withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
                 sh '''
-                    # Prevent terminal prompts from stalling the automated execution
                     export GIT_TERMINAL_PROMPT=0
+                    
+                    # FIXED: Tell Git to trust this workspace directory despite the user mismatch
+                    git config --global --add safe.directory /var/lib/jenkins/workspace/ultimate-demo
                     
                     git config --global user.email "abhishek.xyz@gmail.com"
                     git config --global user.name "ShathirHussain1"
@@ -71,11 +73,8 @@ pipeline {
                     git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
                     git commit -m "Update deployment image to version ${BUILD_NUMBER}"
                     
-                    # Added explicit .git suffix extension to ensure strict mapping compatibility
                     git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
                 '''
             }
         }
     }
-  }
-}
